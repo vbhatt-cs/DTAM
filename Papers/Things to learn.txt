@@ -1,0 +1,20 @@
+Getting image from camera:
+Use camera api to get a file with YUV
+Convert to RGB
+
+Calculations:
+Camera pose estimation
+Real time stereo matching for depth
+Fuse depth map to volume 
+OpenGL ES 2.0
+NEON ARM
+
+Render:
+OpenGL
+
+Others:
+Android NDK
+Java Wrapper
+
+Android:
+Fragments
