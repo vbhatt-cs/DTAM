@@ -10,8 +10,17 @@
 using namespace cv;
 using namespace std;
 
-const int neighbourhood=3;
+const int neighbourhood=1;
 const int COST_THRESHOLD=10000;
+
+//calib.txt values. Will be replaced by reading pose and projecting the corners of voxel cube for max depth.
+int ndisp=70;  //pixels
+int width=722;
+int height=480;
+double f=999.421;
+double baseline=193.001;
+double doffs=32.778;
+//calib end
 
 int main(int argc, char** argv)
 {
@@ -22,7 +31,7 @@ int main(int argc, char** argv)
     begin = clock();
 
     //Input
-    if(argc != 4)
+    if(argc != 3)
     {
 	    cout <<" Usage: imread LeftImage RightImage RequiredDepthImage" << endl;
 	    return -1;
@@ -38,12 +47,6 @@ int main(int argc, char** argv)
         return -1;
     }
     //Input end
-    
-    //calib.txt values. Will be replaced by reading pose and projecting the corners of voxel cube for max depth.
-    int ndisp=190;  //pixels
-    int width=722;
-    int height=480;
-    //calib end
     
     //Cost computation
     Mat dmin(height,width,CV_8UC1);
@@ -108,10 +111,10 @@ int main(int argc, char** argv)
         {
             for(int j=neighbourhood;j<width-neighbourhood-d;j++)
             {
-                int startX=max(0,j-neighbourhood);
-                int startY=max(0,i-neighbourhood);
-                int endX=min(j+neighbourhood,width-1);
-                int endY=min(i+neighbourhood,height-1);
+                int startX=j-neighbourhood;
+                int startY=i-neighbourhood;
+                int endX=j+neighbourhood;
+                int endY=i+neighbourhood;
                 
                 double cost=0;
                 for(int y=startY;y<=endY;y++)
@@ -132,13 +135,21 @@ int main(int argc, char** argv)
             if(costMin.at<double>(i,j)>COST_THRESHOLD)
                 dmin.at<uchar>(i,j)=0;*/
 
-    dmin=dmin*255/ndisp;
+    Mat temp(height,width,CV_64FC1);
+    dmin.convertTo(temp,CV_64FC1);
+    temp=(temp+doffs);
+    Mat z=(f*baseline)/temp;
+
+    double minD,maxD;
+    minMaxLoc(dmin,&minD,&maxD);
+
+    dmin=dmin*255/(maxD-minD);
     
     end = clock();
     time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
     cout<<time_spent<<endl;
 
-    imwrite(argv[3],dmin);
+    //imwrite(argv[3],dmin);
 
     namedWindow("WindowL", WINDOW_NORMAL ); // Create a window for display.
     namedWindow("WindowR", WINDOW_NORMAL);

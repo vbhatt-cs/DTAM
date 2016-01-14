@@ -7,13 +7,33 @@
 using namespace cv;
 using namespace std;
 
-const int BLOCK_SIZE=9;
-const int ndisp=16*10;
-const double doffs=28.797;
-const double baseline=237.604;
+const int BLOCK_SIZE=7;
+const int ndisp=16*5;
+const double doffs=32.778;
+const double baseline=193.001;
+const double f=999.421;
 
-double q[4][4]={{1,0,0,254.151},{0,1,0,240.842},{0,0,0,980.198},{0,0,1/baseline,doffs/baseline}};
-Mat Q(4,4,CV_64F,q);
+void costFunction(double x,const Mat &z,const Mat &imL,const Mat &imR,double &cost,double &grad)
+{
+    cost=0;
+    grad=0;
+
+    Mat imGrX;
+    Scharr(imR,imGrX,CV_16S,1,0);
+    for(int i=0;i<imL.rows;i++)
+        for(int j=ndisp;j<imL.cols;j++)
+        {
+            int d=x*f/z.at<double>(i,j)-doffs;
+            if(d<ndisp && d>=0)
+            {
+                double diff=imR.at<uchar>(i,j-d)-imL.at<uchar>(i,j);
+                cost+=diff*diff;
+                grad+=2*diff*imGrX.at<double>(i,j-d);
+            }
+        }
+    cost/=1000000;
+    grad/=1000000;
+}
 
 int main(int argc, char* argv[])
 {
@@ -28,28 +48,32 @@ int main(int argc, char* argv[])
 
     Mat disp16=Mat(imgL.rows,imgL.cols,CV_16S);
     Mat disp8=Mat(imgL.rows,imgL.cols,CV_8UC1);
+    Mat dmin=Mat(imgL.rows,imgL.cols,CV_64FC1);
 
     Ptr<StereoBM> stereo=StereoBM::create(ndisp,BLOCK_SIZE);
     stereo->compute(imgL,imgR,disp16);
 
     double minD,maxD;
     minMaxLoc(disp16,&minD,&maxD);
+
+    disp16.convertTo(dmin,CV_64FC1);
+    dmin=dmin/16;
+    Mat z=f*baseline/(dmin+doffs);
+    cout<<z.rowRange(300,303).colRange(300,303);
+
+    //Pose estimation
+    double initialX=120;
+    double x=initialX;
+
+    Mat cost=Mat::zeros(300,1,CV_64FC1);
+    Mat grad=Mat::zeros(300,1,CV_64FC1);
+
+    for(int i=0;i<300;i++)
+        costFunction(i,z,imgL,imgR,cost.at<double>(i,1),grad.at<double>(i,1));
+
+    cout<<cost;
     
-    disp16.convertTo(disp8,CV_8UC1,255/(maxD-minD));
-
-    Mat depth3D,depth8,depth3DN;
-    reprojectImageTo3D(disp8,depth3D,Q);
-
-    for(int i=300;i<305;i++)
-    {
-        for(int j=300;j<305;j++)
-        {
-            for(int k=0;k<3;k++)
-                cout<<depth3D.at<Vec3f>(i,j)[k]<<",";
-            cout<<" ";
-        }
-        cout<<endl;
-    }
+    disp16.convertTo(disp8,CV_8UC1,255/(maxD-minD));  
 
     namedWindow("Disp",WINDOW_NORMAL);
     imshow("Disp",disp8);
