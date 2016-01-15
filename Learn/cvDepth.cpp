@@ -3,23 +3,22 @@
 #include<opencv2/calib3d/calib3d.hpp>
 #include<opencv2/imgproc/imgproc.hpp>
 #include<iostream>
+#include<cmath>
 
 using namespace cv;
 using namespace std;
 
-const int BLOCK_SIZE=7;
+const int BLOCK_SIZE=5;
 const int ndisp=16*5;
 const double doffs=32.778;
 const double baseline=193.001;
 const double f=999.421;
 
-void costFunction(double x,const Mat &z,const Mat &imL,const Mat &imR,double &cost,double &grad)
+void costFunction(double x,const Mat &z,const Mat &imL,const Mat &imR, const Mat &imGrX, double &cost,double &grad)
 {
     cost=0;
     grad=0;
-
-    Mat imGrX;
-    Scharr(imR,imGrX,CV_16S,1,0);
+    
     for(int i=0;i<imL.rows;i++)
         for(int j=ndisp;j<imL.cols;j++)
         {
@@ -59,19 +58,39 @@ int main(int argc, char* argv[])
     disp16.convertTo(dmin,CV_64FC1);
     dmin=dmin/16;
     Mat z=f*baseline/(dmin+doffs);
-    cout<<z.rowRange(300,303).colRange(300,303);
 
     //Pose estimation
     double initialX=120;
     double x=initialX;
+    double cost,grad;
 
-    Mat cost=Mat::zeros(300,1,CV_64FC1);
-    Mat grad=Mat::zeros(300,1,CV_64FC1);
+    //Mat cost=Mat::zeros(300,1,CV_64FC1);
+    //Mat grad=Mat::zeros(300,1,CV_64FC1);
+    Mat imGrX;
 
-    for(int i=0;i<300;i++)
-        costFunction(i,z,imgL,imgR,cost.at<double>(i,1),grad.at<double>(i,1));
+    Scharr(imgR,imGrX,CV_64FC1,1,0);
 
-    cout<<cost;
+    costFunction(initialX,z,imgL,imgR,imGrX,cost,grad);
+    int numIter=300;
+    Mat Jhist=Mat::zeros(numIter,1,CV_64FC1);
+    Jhist.at<double>(0,1)=cost;
+    x+=10*sqrt(cost)/grad;
+    //cout<<cost<<" "<<grad<<" "<<x<<endl;
+
+    costFunction(x,z,imgL,imgR,imGrX,cost,grad);
+    for(int i=1;i<numIter;i++)
+    {
+        costFunction(x,z,imgL,imgR,imGrX,cost,grad);
+        x+=10*sqrt(cost)/grad;
+        Jhist.at<double>(i,1)=cost;
+    }
+
+    cout<<x;
+    //cout<<Jhist;
+    /*for(int i=0;i<300;i++)
+        costFunction(i,z,imgL,imgR,imGrX,cost.at<double>(i,1),grad.at<double>(i,1));
+
+    cout<<grad;*/
     
     disp16.convertTo(disp8,CV_8UC1,255/(maxD-minD));  
 
